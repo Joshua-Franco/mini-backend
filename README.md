@@ -22,11 +22,19 @@ La tabla `productos` y sus ocho registros iniciales se crean al iniciar el servi
 
 ## Iniciar el servidor
 
+Para desarrollo local:
+
 ```powershell
 py run.py
 ```
 
-Al iniciar, el servidor crea las tablas y carga los ocho productos iniciales si el catálogo está vacío. La tabla almacena los datos y el nombre de cada imagen; los archivos JPG se conservan en `src/static/images` y Flask los entrega al frontend. API disponible en `http://127.0.0.1:6072/api/products`.
+Para Render, configura el Start Command como:
+
+```text
+gunicorn run:app
+```
+
+En ambos casos, la aplicación crea las tablas y carga los ocho productos iniciales si el catálogo está vacío. La tabla almacena los datos y el nombre de cada imagen; los archivos JPG se conservan en `src/static/images` y Flask los entrega al frontend. En local, la API está disponible en `http://127.0.0.1:6072/api/products`.
 
 La website configurada en `C:\Users\joshu\Desktop\mini-ecomerce-games` usa esa URL por defecto. Iníciala con `pnpm dev`; estará disponible en `http://localhost:5475`. Si el backend está en otro host, define `VITE_API_URL` en el entorno de Vite, incluyendo el prefijo `/api`.
 

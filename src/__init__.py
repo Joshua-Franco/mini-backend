@@ -5,6 +5,14 @@ from flask_restful import Api
 from src.config import Config
 from src.extensions import db
 from src.resources.products import ProductListResource, ProductResource
+from src.seed import seed_products
+
+
+def init_db(app: Flask) -> None:
+    """Crea el esquema y carga el catálogo inicial al arrancar la aplicación."""
+    with app.app_context():
+        db.create_all()
+        seed_products()
 
 
 def create_app() -> Flask:
@@ -15,6 +23,8 @@ def create_app() -> Flask:
     # Conecta extensiones sin acoplarlas a una instancia global de Flask.
     db.init_app(app)
     CORS(app, resources={r"/api/*": {"origins": app.config["FRONTEND_ORIGINS"]}})
+
+    init_db(app)
 
     # Registra las rutas para listar y consultar productos.
     api = Api(app)
