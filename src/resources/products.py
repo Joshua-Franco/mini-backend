@@ -92,6 +92,7 @@ class ProductListResource(Resource):
 
     @jwt_required()
     def post(self):
+        """Crea un producto después de comprobar identidad y permisos."""
         permission_error = admin_error()
         if permission_error:
             return permission_error
@@ -133,6 +134,7 @@ class ProductResource(Resource):
 
     @jwt_required()
     def put(self, product_id: str):
+        """Reemplaza los campos del producto validado por su UUID."""
         permission_error = admin_error()
         if permission_error:
             return permission_error
@@ -162,6 +164,7 @@ class ProductResource(Resource):
 
     @jwt_required()
     def delete(self, product_id: str):
+        """Elimina el producto solicitado solo si existe y el usuario es admin."""
         permission_error = admin_error()
         if permission_error:
             return permission_error

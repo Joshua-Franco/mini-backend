@@ -41,8 +41,9 @@ def create_app() -> Flask:
 
     @app.get("/api/images")
     def list_images():
-        """Lista imágenes disponibles y sus URLs públicas."""
+        """Devuelve imágenes permitidas con sus URLs públicas."""
         images_directory = Path(app.static_folder or "") / "images"
+        # Solo publica formatos comunes de imagen y ordena la lista por nombre.
         allowed_extensions = {".gif", ".jpeg", ".jpg", ".png", ".webp"}
         images = (
             [

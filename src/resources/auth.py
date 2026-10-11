@@ -65,6 +65,8 @@ def get_token_user() -> User | None:
 
 
 class RegisterResource(Resource):
+    """Registra una cuenta nueva y entrega su primer token de acceso."""
+
     def post(self):
         # No crear cuentas si el servidor no puede emitir sus tokens de acceso.
         if not current_app.config.get("JWT_SECRET_KEY"):
@@ -109,6 +111,8 @@ class RegisterResource(Resource):
 
 
 class LoginResource(Resource):
+    """Valida credenciales existentes y emite un token de acceso."""
+
     def post(self):
         # La validación de credenciales precede a cualquier consulta o hash.
         if not current_app.config.get("JWT_SECRET_KEY"):
@@ -132,6 +136,8 @@ class LoginResource(Resource):
 
 
 class CurrentUserResource(Resource):
+    """Lee, actualiza o elimina la cuenta del usuario autenticado."""
+
     def get_current_user(self) -> User | tuple[dict[str, str], int]:
         """Resuelve el usuario autenticado o devuelve un error de autorización."""
         user = get_token_user()
@@ -149,6 +155,7 @@ class CurrentUserResource(Resource):
 
     @jwt_required()
     def patch(self):
+        """Actualiza solo los campos permitidos del perfil propio."""
         user = self.get_current_user()
         if isinstance(user, tuple):
             return user
@@ -186,6 +193,7 @@ class CurrentUserResource(Resource):
 
     @jwt_required()
     def delete(self):
+        """Borra la cuenta propia tras comprobar la contraseña actual."""
         user = self.get_current_user()
         if isinstance(user, tuple):
             return user

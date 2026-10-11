@@ -78,22 +78,26 @@ class ProfileUpdatePayload(BaseModel):
     @field_validator("name", mode="before")
     @classmethod
     def normalize_name(cls, value: object) -> object:
+        """Quita espacios extremos antes de aplicar el límite de longitud."""
         return value.strip() if isinstance(value, str) else value
 
     @field_validator("email", mode="before")
     @classmethod
     def normalize_email(cls, value: object) -> object:
+        """Normaliza el correo para mantener una comparación uniforme."""
         return value.strip().casefold() if isinstance(value, str) else value
 
     @field_validator("email")
     @classmethod
     def validate_email(cls, value: str | None) -> str | None:
+        """Rechaza correos con formato inválido antes de guardarlos."""
         if value is not None and not EMAIL_PATTERN.fullmatch(value):
             raise ValueError("ingresa un correo válido")
         return value
 
     @model_validator(mode="after")
     def require_changes(self):
+        """Exige al menos un campo modificable en la solicitud PATCH."""
         if self.name is None and self.email is None:
             raise ValueError("indica un nombre o correo para actualizar")
         return self
@@ -129,11 +133,13 @@ class ProductPayload(BaseModel):
     specs: str = Field(default="", max_length=500)
     image_filename: str = Field(alias="imageFilename", min_length=1, max_length=180)
 
+    # Normaliza texto obligatorio antes de verificar sus límites.
     @field_validator("name", "category", "icon", "image_filename", mode="before")
     @classmethod
     def trim_required_text(cls, value: object) -> object:
         return value.strip() if isinstance(value, str) else value
 
+    # Quita espacios accidentales en campos descriptivos opcionales.
     @field_validator("badge", "specs", mode="before")
     @classmethod
     def trim_optional_text(cls, value: object) -> object:
@@ -142,6 +148,7 @@ class ProductPayload(BaseModel):
     @field_validator("image_filename")
     @classmethod
     def validate_image_filename(cls, value: str) -> str:
+        """Impide rutas o caracteres que podrían escapar del directorio de imágenes."""
         if value in {".", ".."} or not re.fullmatch(r"[A-Za-z0-9._-]+", value):
             raise ValueError("el nombre de imagen solo puede contener letras, números, puntos, guiones o guiones bajos")
         return value
