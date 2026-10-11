@@ -1,15 +1,18 @@
-from flask import Flask
+from pathlib import Path
+
+from flask import Flask, request, url_for
 from flask_cors import CORS
 from flask_restful import Api
 
 from src.config import Config
-from src.extensions import db
+from src.extensions import db, jwt
+from src.resources.auth import CurrentUserResource, LoginResource, RegisterResource
 from src.resources.products import ProductListResource, ProductResource
 from src.seed import seed_products
 
 
 def init_db(app: Flask) -> None:
-    """Crea el esquema y carga el catálogo inicial al arrancar la aplicación."""
+    """Crea las tablas y carga productos de ejemplo si el catálogo está vacío."""
     with app.app_context():
         db.create_all()
         seed_products()
@@ -22,13 +25,55 @@ def create_app() -> Flask:
 
     # Conecta extensiones sin acoplarlas a una instancia global de Flask.
     db.init_app(app)
-    CORS(app, resources={r"/api/*": {"origins": app.config["FRONTEND_ORIGINS"]}})
+    jwt.init_app(app)
+
+    # Rechaza operaciones de cuenta si falta la clave usada para firmar tokens.
+    @app.before_request
+    def check_auth_configuration():
+        if request.path.startswith("/api/auth/") and not app.config.get("JWT_SECRET_KEY"):
+            return {"error": "La autenticación no está configurada en el servidor."}, 503
+        return None
+
+    # Endpoint sencillo para comprobar que el servidor responde.
+    @app.get("/")
+    def health_check():
+        return {"server": "okay"}, 200
+
+    @app.get("/api/images")
+    def list_images():
+        """Lista imágenes disponibles y sus URLs públicas."""
+        images_directory = Path(app.static_folder or "") / "images"
+        allowed_extensions = {".gif", ".jpeg", ".jpg", ".png", ".webp"}
+        images = (
+            [
+                {
+                    "filename": image.name,
+                    "url": url_for("static", filename=f"images/{image.name}", _external=True),
+                }
+                for image in sorted(images_directory.iterdir(), key=lambda file: file.name.casefold())
+                if image.is_file() and image.suffix.casefold() in allowed_extensions
+            ]
+            if images_directory.is_dir()
+            else []
+        )
+        return {"images": images}, 200
+
+    # Autoriza el origen del frontend y los encabezados usados por la API.
+    CORS(
+        app,
+        resources={r"/api/*": {"origins": app.config["FRONTEND_ORIGINS"]}},
+        allow_headers=["Content-Type", "Authorization"],
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    )
 
     init_db(app)
 
-    # Registra las rutas para listar y consultar productos.
+    # Registra las rutas del catálogo y las operaciones de cuenta.
     api = Api(app)
     api.add_resource(ProductListResource, "/api/products")
     api.add_resource(ProductResource, "/api/products/<string:product_id>")
+    api.add_resource(RegisterResource, "/api/auth/register")
+    api.add_resource(LoginResource, "/api/auth/login")
+    api.add_resource(CurrentUserResource, "/api/auth/me")
 
     return app

@@ -3,9 +3,9 @@ from decimal import Decimal
 from sqlalchemy import select
 
 from src.extensions import db
-from src.models import Product
+from src.models import CatalogSeedState, Product
 
-# Datos iniciales; la imagen se guarda aparte y aquí solo se registra su nombre.
+# Productos de ejemplo; cada imagen se sirve como archivo estático por separado.
 SEED_PRODUCTS = [
     {
         "sort_order": 1,
@@ -99,11 +99,20 @@ SEED_PRODUCTS = [
 
 
 def seed_products() -> None:
-    """Carga el catálogo de demostración solo cuando la tabla está vacía."""
-    existing = db.session.execute(select(Product.id).limit(1)).first()
-    if existing:
+    """Carga productos de ejemplo una sola vez en una base recién inicializada."""
+    # El marcador evita reponer productos si un administrador vacía el catálogo.
+    seeded = db.session.get(CatalogSeedState, "products")
+    if seeded:
         return
 
+    # No reemplaza ni duplica productos que ya existan en la base.
+    existing = db.session.execute(select(Product.id).limit(1)).first()
+    if existing:
+        db.session.add(CatalogSeedState(key="products"))
+        db.session.commit()
+        return
+
+    # Convierte precios de texto a Decimal para conservar precisión monetaria.
     db.session.add_all(
         [
             Product(
@@ -116,4 +125,5 @@ def seed_products() -> None:
             for product in SEED_PRODUCTS
         ]
     )
+    db.session.add(CatalogSeedState(key="products"))
     db.session.commit()

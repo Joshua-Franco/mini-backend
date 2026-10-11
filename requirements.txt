@@ -1,10 +1,20 @@
-# Framework HTTP y soporte para endpoints REST y solicitudes CORS.
+# Framework web para crear la API y gestionar solicitudes HTTP.
 Flask>=3.1,<4
+# Permite solicitudes cross-origin desde el frontend.
 Flask-Cors>=5,<6
+# Facilita la definición de recursos REST para la API.
 Flask-RESTful>=0.3.10,<0.4
+# Servidor WSGI para ejecutar la aplicación en producción.
 gunicorn>=22,<24
-# ORM para la base de datos y adaptador PostgreSQL con binarios incluidos.
+# ORM para definir modelos y consultar la base de datos.
 Flask-SQLAlchemy>=3.1.1,<4
+# Controlador PostgreSQL Psycopg 3 con binarios incluidos.
 psycopg[binary]>=3.2,<4
-# Carga variables de configuración desde el archivo .env.
+# Carga configuración desde variables de entorno y archivos .env.
 python-dotenv>=1.0,<2
+# Gestiona autenticación y firma/verificación de tokens JWT en Flask.
+Flask-JWT-Extended>=4.7,<5
+# Genera y verifica hashes seguros para las contraseñas.
+bcrypt>=4.2,<6
+# Valida los datos de entrada recibidos por la API.
+pydantic>=2.10,<3
