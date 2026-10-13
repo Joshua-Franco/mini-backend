@@ -121,28 +121,16 @@ class DeleteAccountPayload(BaseModel):
 class ProductPayload(BaseModel):
     """Valida los datos completos que se crean o reemplazan en el catálogo."""
 
-    model_config = ConfigDict(strict=True, extra="forbid", populate_by_name=True)
+    model_config = ConfigDict(strict=True, extra="forbid")
 
-    sort_order: int = Field(alias="sortOrder", gt=0)
     name: str = Field(min_length=1, max_length=180)
-    category: str = Field(min_length=1, max_length=40)
     price: float = Field(gt=0, allow_inf_nan=False)
-    old_price: float | None = Field(default=None, alias="oldPrice", gt=0, allow_inf_nan=False)
-    badge: str = Field(default="", max_length=80)
-    icon: str = Field(default="fa-box", min_length=1, max_length=80)
-    specs: str = Field(default="", max_length=500)
     image_filename: str = Field(alias="imageFilename", min_length=1, max_length=180)
 
     # Normaliza texto obligatorio antes de verificar sus límites.
-    @field_validator("name", "category", "icon", "image_filename", mode="before")
+    @field_validator("name", "image_filename", mode="before")
     @classmethod
     def trim_required_text(cls, value: object) -> object:
-        return value.strip() if isinstance(value, str) else value
-
-    # Quita espacios accidentales en campos descriptivos opcionales.
-    @field_validator("badge", "specs", mode="before")
-    @classmethod
-    def trim_optional_text(cls, value: object) -> object:
         return value.strip() if isinstance(value, str) else value
 
     @field_validator("image_filename")

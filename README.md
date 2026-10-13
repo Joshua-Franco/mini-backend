@@ -18,7 +18,7 @@ La base PostgreSQL se llama `mini-ecomerce-games`. Si todavía no existe, créal
 CREATE DATABASE "mini-ecomerce-games";
 ```
 
-Las tablas del backend se crean al iniciar el servidor; los ocho productos iniciales se cargan una sola vez. El marcador de inicialización evita que vuelvan a aparecer si se elimina el catálogo. Antes de iniciar, configura en `.env` una clave JWT aleatoria y secreta. Por ejemplo, puedes generar una localmente con `py -c "import secrets; print(secrets.token_urlsafe(48))"` y asignarla a `JWT_SECRET_KEY`. Nunca publiques esa clave.
+Las tablas del backend se crean al iniciar el servidor. En bases existentes, el inicio agrega la columna `activado` a `productos` y marca como activos los productos ya guardados. Los ocho productos iniciales se cargan únicamente si la tabla está vacía; los productos desactivados permanecen en ella y no hacen que se carguen de nuevo. Antes de iniciar, configura en `.env` una clave JWT aleatoria y secreta. Por ejemplo, puedes generar una localmente con `py -c "import secrets; print(secrets.token_urlsafe(48))"` y asignarla a `JWT_SECRET_KEY`. Nunca publiques esa clave.
 
 `JWT_ACCESS_TOKEN_SECONDS` controla la vigencia del token (por defecto, 1800 segundos). Flask-JWT-Extended firma y verifica los tokens; bcrypt genera y comprueba hashes de contraseñas. Las contraseñas se limitan a 72 bytes para evitar que bcrypt las trunque. Pydantic valida los datos de entrada. El frontend conserva el token solo en memoria, por lo que se pierde la sesión al recargar la página. El cierre de sesión descarta el token del navegador; al ser JWT sin estado, un token copiado sigue siendo válido hasta que venza.
 
@@ -46,16 +46,16 @@ La website en `C:\Users\joshu\Music\website\mini-ecomerce-games` usa el backend 
 
 - `GET /`: confirma que el servidor está disponible con `{"server":"okay"}`.
 - `GET /api/images`: lista los archivos de imagen disponibles con sus URLs públicas.
-- `GET /api/products`: lista el catálogo; acepta `?category=gpu` y `?category=all`.
-- `GET /api/products/<uuid>`: consulta un producto.
+- `GET /api/products`: lista únicamente productos activos, ordenados por nombre.
+- `GET /api/products/<uuid>`: consulta un producto activo; los desactivados responden como no encontrados.
 - `POST /api/products`: crea un producto; requiere JWT de una cuenta incluida en `ADMIN_EMAILS`.
 - `PUT /api/products/<uuid>`: reemplaza los datos del producto; requiere permisos de administrador.
-- `DELETE /api/products/<uuid>`: elimina un producto; requiere permisos de administrador.
+- `DELETE /api/products/<uuid>`: desactiva el producto sin borrarlo de PostgreSQL; requiere permisos de administrador. Un producto ya desactivado responde como no encontrado.
 - `POST /api/auth/register`: registra nombre, correo y contraseña; crea una cuenta y entrega un JWT.
 - `POST /api/auth/login`: valida correo y contraseña, y entrega un JWT.
-- `GET /api/auth/me`: devuelve la cuenta asociada al JWT enviado como `Authorization: Bearer <token>`.
+- `GET /api/auth/me`: devuelve la cuenta asociada al JWT enviado con un encabezado `Authorization: Bearer`.
 - `PATCH /api/auth/me`: actualiza el nombre o correo de la cuenta autenticada; requiere JWT.
 - `DELETE /api/auth/me`: elimina la cuenta autenticada con su contraseña actual; requiere JWT.
 - `GET /static/images/<archivo>`: sirve las imágenes almacenadas en `src/static/images`.
 
-Las solicitudes de escritura de producto requieren `sortOrder`, `name`, `category`, `price` e `imageFilename`; `oldPrice`, `badge`, `icon` y `specs` son opcionales. El archivo de imagen debe existir en `src/static/images`. Las respuestas incluyen `id` UUID, `sortOrder`, `name`, `category`, `price`, `oldPrice`, `badge`, `icon`, `specs`, `imageFilename` e `image` (URL absoluta de la imagen).
+Crear, editar y desactivar productos requiere un JWT válido de una cuenta existente cuyo correo esté en `ADMIN_EMAILS`; las cuentas registradas que no estén autorizadas reciben `403`, y las solicitudes sin un token válido reciben `401`. Las solicitudes de escritura requieren `name`, `price` e `imageFilename`. El archivo de imagen debe existir en `src/static/images`. Las respuestas de producto incluyen `id` UUID, `name`, `price`, `activado`, `imageFilename` e `image` (URL absoluta de la imagen). `activado` se establece en `true` al crear un producto; no se puede cambiar mediante el payload de escritura.

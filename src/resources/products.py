@@ -5,15 +5,14 @@ from flask import current_app, request, url_for
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from flask_restful import Resource
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from pydantic import ValidationError
 
 from src.extensions import db
 from src.models import Product, User
 from src.resources.auth_schemas import ProductPayload
-from pydantic import ValidationError
 
 
-def serialize_product(product: Product) -> dict[str, str | int | float | None]:
+def serialize_product(product: Product) -> dict[str, str | int | float | bool | None]:
     """Convierte el producto en JSON e incluye la URL pública de su imagen."""
     # Genera una URL absoluta para que el frontend pueda mostrar la imagen.
     image_url = url_for(
@@ -56,38 +55,21 @@ def admin_error():
     return None
 
 
-def duplicate_sort_order_error(sort_order: int) -> bool:
-    """Comprueba si una colisión de orden debe responderse como conflicto."""
-    return (
-        db.session.execute(
-            select(Product.id).where(Product.sort_order == sort_order).limit(1)
-        ).scalar_one_or_none()
-        is not None
-    )
-
-
 def apply_product_payload(product: Product, payload: ProductPayload) -> None:
     """Copia los datos validados al modelo y conserva precisión en los precios."""
-    product.sort_order = payload.sort_order
     product.name = payload.name
-    product.category = payload.category
     product.price = Decimal(str(payload.price))
-    product.old_price = Decimal(str(payload.old_price)) if payload.old_price is not None else None
-    product.badge = payload.badge
-    product.icon = payload.icon
-    product.specs = payload.specs
     product.image_filename = payload.image_filename
 
 
 class ProductListResource(Resource):
     def get(self):
-        """Lista productos en orden estable y filtra opcionalmente por categoría."""
-        category = request.args.get("category")
-        query = Product.query
-        if category and category != "all":
-            query = query.filter_by(category=category)
-
-        products = query.order_by(Product.sort_order.asc()).all()
+        """Lista productos activos en orden alfabético."""
+        products = (
+            Product.query.filter_by(activado=True)
+            .order_by(Product.name.asc())
+            .all()
+        )
         return {"products": [serialize_product(product) for product in products]}, 200
 
     @jwt_required()
@@ -105,13 +87,7 @@ class ProductListResource(Resource):
         product = Product()
         apply_product_payload(product, payload)
         db.session.add(product)
-        try:
-            db.session.commit()
-        except IntegrityError:
-            db.session.rollback()
-            if duplicate_sort_order_error(payload.sort_order):
-                return {"error": "Ya existe un producto con ese orden."}, 409
-            raise
+        db.session.commit()
 
         return serialize_product(product), 201
 
@@ -126,7 +102,7 @@ class ProductResource(Resource):
             return {"error": "El identificador del producto no es válido."}, 400
 
         product = db.session.execute(
-            select(Product).where(Product.id == product_uuid)
+            select(Product).where(Product.id == product_uuid, Product.activado.is_(True))
         ).scalar_one_or_none()
         if product is None:
             return {"error": "Producto no encontrado."}, 404
@@ -142,7 +118,9 @@ class ProductResource(Resource):
         product_uuid = self.parse_product_id(product_id)
         if isinstance(product_uuid, tuple):
             return product_uuid
-        product = db.session.get(Product, product_uuid)
+        product = db.session.execute(
+            select(Product).where(Product.id == product_uuid, Product.activado.is_(True))
+        ).scalar_one_or_none()
         if product is None:
             return {"error": "Producto no encontrado."}, 404
 
@@ -152,19 +130,13 @@ class ProductResource(Resource):
         assert isinstance(payload, ProductPayload)
 
         apply_product_payload(product, payload)
-        try:
-            db.session.commit()
-        except IntegrityError:
-            db.session.rollback()
-            if duplicate_sort_order_error(payload.sort_order):
-                return {"error": "Ya existe un producto con ese orden."}, 409
-            raise
+        db.session.commit()
 
         return serialize_product(product), 200
 
     @jwt_required()
     def delete(self, product_id: str):
-        """Elimina el producto solicitado solo si existe y el usuario es admin."""
+        """Desactiva el producto solicitado sin borrarlo de la base de datos."""
         permission_error = admin_error()
         if permission_error:
             return permission_error
@@ -172,13 +144,15 @@ class ProductResource(Resource):
         product_uuid = self.parse_product_id(product_id)
         if isinstance(product_uuid, tuple):
             return product_uuid
-        product = db.session.get(Product, product_uuid)
+        product = db.session.execute(
+            select(Product).where(Product.id == product_uuid, Product.activado.is_(True))
+        ).scalar_one_or_none()
         if product is None:
             return {"error": "Producto no encontrado."}, 404
 
-        db.session.delete(product)
+        product.activado = False
         db.session.commit()
-        return {"message": "Producto eliminado."}, 200
+        return {"message": "Producto desactivado."}, 200
 
     @staticmethod
     def parse_product_id(product_id: str) -> uuid.UUID | tuple[dict[str, str], int]:

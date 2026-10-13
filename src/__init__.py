@@ -3,6 +3,7 @@ from pathlib import Path
 from flask import Flask, request, url_for
 from flask_cors import CORS
 from flask_restful import Api
+from sqlalchemy import inspect, text
 
 from src.config import Config
 from src.extensions import db, jwt
@@ -15,7 +16,53 @@ def init_db(app: Flask) -> None:
     """Crea las tablas y carga productos de ejemplo si el catálogo está vacío."""
     with app.app_context():
         db.create_all()
+        migrate_product_schema()
         seed_products()
+
+
+def migrate_product_schema() -> None:
+    """Adapta tablas existentes al modelo actual del catálogo."""
+    inspector = inspect(db.engine)
+    columns = {column["name"] for column in inspector.get_columns("productos")}
+    dialect = db.engine.dialect.name
+
+    if dialect == "postgresql":
+        actions = []
+        if "activado" not in columns:
+            actions.append("ADD COLUMN IF NOT EXISTS activado BOOLEAN NOT NULL DEFAULT TRUE")
+        actions.extend(
+            [
+                "DROP COLUMN IF EXISTS sort_order",
+                "DROP COLUMN IF EXISTS old_price",
+                "DROP COLUMN IF EXISTS category",
+                "DROP COLUMN IF EXISTS badge",
+                "DROP COLUMN IF EXISTS icon",
+                "DROP COLUMN IF EXISTS specs",
+            ]
+        )
+        statement = "ALTER TABLE productos " + ", ".join(actions)
+    else:
+        actions = []
+        if "activado" not in columns:
+            actions.append("ADD COLUMN activado BOOLEAN NOT NULL DEFAULT TRUE")
+        removed_columns = {"sort_order", "old_price", "category", "badge", "icon", "specs"}
+        for index in inspector.get_indexes("productos"):
+            if removed_columns.intersection(index["column_names"]):
+                index_name = db.engine.dialect.identifier_preparer.quote(index["name"])
+                with db.engine.begin() as connection:
+                    connection.execute(text(f"DROP INDEX {index_name}"))
+        for column in removed_columns:
+            if column in columns:
+                actions.append(f"DROP COLUMN {column}")
+        if not actions:
+            return
+
+    with db.engine.begin() as connection:
+        if dialect == "postgresql":
+            connection.execute(text(statement))
+        else:
+            for action in actions:
+                connection.execute(text(f"ALTER TABLE productos {action}"))
 
 
 def create_app() -> Flask:
