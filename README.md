@@ -1,61 +1,101 @@
-# Backend NovaTech
+# Mini backend
 
-API Flask para entregar a la website el catálogo, sus datos y las imágenes de los productos.
+API REST construida con Flask para gestionar cuentas y productos. Usa PostgreSQL como base de datos y SQLAlchemy para el acceso a los datos.
 
-## Preparar el entorno
+## Requisitos
+
+- Python.
+- PostgreSQL.
+
+## Instalación y configuración
+
+Desde PowerShell, en la carpeta del proyecto:
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 py -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-El backend utiliza PostgreSQL y Psycopg, y no crea una carpeta `instance`. Configura en `.env` la contraseña del usuario PostgreSQL. Si contiene caracteres especiales, codifícalos para URL.
+Crea una base de datos PostgreSQL y configura `.env` con sus datos de conexión. Por ejemplo:
 
-La base PostgreSQL se llama `mini-ecomerce-games`. Si todavía no existe, créala desde pgAdmin o `psql` antes de iniciar el backend:
-
-```sql
-CREATE DATABASE "mini-ecomerce-games";
+```dotenv
+DATABASE_URL=postgresql+psycopg://usuario:contraseña@localhost:5432/mini-ecomerce-games
+PORT=6072
+FLASK_DEBUG=true
+FRONTEND_ORIGINS=http://localhost:5475,http://127.0.0.1:5475
 ```
 
-Las tablas del backend se crean al iniciar el servidor. En bases existentes, el inicio agrega la columna `activado` a `productos` y marca como activos los productos ya guardados. Los ocho productos iniciales se cargan únicamente si la tabla está vacía; los productos desactivados permanecen en ella y no hacen que se carguen de nuevo. Antes de iniciar, configura en `.env` una clave JWT aleatoria y secreta. Por ejemplo, puedes generar una localmente con `py -c "import secrets; print(secrets.token_urlsafe(48))"` y asignarla a `JWT_SECRET_KEY`. Nunca publiques esa clave.
+`DATABASE_URL` debe apuntar a una base de datos existente y `PORT` es obligatorio. Si la contraseña contiene caracteres especiales, codifícalos para URL. Al iniciar, la aplicación crea las tablas `cuentas` y `productos` si todavía no existen; no carga productos iniciales ni modifica el esquema de tablas existentes.
 
-`JWT_ACCESS_TOKEN_SECONDS` controla la vigencia del token (por defecto, 1800 segundos). Flask-JWT-Extended firma y verifica los tokens; bcrypt genera y comprueba hashes de contraseñas. Las contraseñas se limitan a 72 bytes para evitar que bcrypt las trunque. Pydantic valida los datos de entrada. El frontend conserva el token solo en memoria, por lo que se pierde la sesión al recargar la página. El cierre de sesión descarta el token del navegador; al ser JWT sin estado, un token copiado sigue siendo válido hasta que venza.
-
-Para habilitar la administración del catálogo, registra primero la cuenta administradora y luego configura `ADMIN_EMAILS` con su correo. Se aceptan varios correos separados por comas. Reinicia o despliega el backend después de configurar la variable. Los correos listados quedan reservados y no se pueden registrar o reclamar cambiando el correo de una cuenta normal.
-
-## Iniciar el servidor
-
-Para desarrollo local:
+## Iniciar
 
 ```powershell
 py run.py
 ```
 
-Para Render, configura el Start Command como:
-
-```text
-gunicorn run:app
-```
-
-En ambos casos, la aplicación crea las tablas y carga los ocho productos iniciales si el catálogo está vacío. La tabla almacena los datos y el nombre de cada imagen; los archivos JPG se conservan en `src/static/images` y Flask los entrega al frontend. En local, la API está disponible en `http://127.0.0.1:6072/api/products`.
-
-La website en `C:\Users\joshu\Music\website\mini-ecomerce-games` usa el backend desplegado por defecto. Iníciala con `pnpm dev`; estará disponible en `http://localhost:5475`. Si el backend está en otro host, define `VITE_API_URL` en el entorno de Vite, incluyendo el prefijo `/api`. Agrega el origen exacto de la website a `FRONTEND_ORIGINS` si no coincide con los valores locales predeterminados.
+El servidor escucha en `http://127.0.0.1:6072` con la configuración de ejemplo. La comprobación de estado está en `/`.
 
 ## Endpoints
 
-- `GET /`: confirma que el servidor está disponible con `{"server":"okay"}`.
-- `GET /api/images`: lista los archivos de imagen disponibles con sus URLs públicas.
-- `GET /api/products`: lista únicamente productos activos, ordenados por nombre.
-- `GET /api/products/<uuid>`: consulta un producto activo; los desactivados responden como no encontrados.
-- `POST /api/products`: crea un producto; requiere JWT de una cuenta incluida en `ADMIN_EMAILS`.
-- `PUT /api/products/<uuid>`: reemplaza los datos del producto; requiere permisos de administrador.
-- `DELETE /api/products/<uuid>`: desactiva el producto sin borrarlo de PostgreSQL; requiere permisos de administrador. Un producto ya desactivado responde como no encontrado.
-- `POST /api/auth/register`: registra nombre, correo y contraseña; crea una cuenta y entrega un JWT.
-- `POST /api/auth/login`: valida correo y contraseña, y entrega un JWT.
-- `GET /api/auth/me`: devuelve la cuenta asociada al JWT enviado con un encabezado `Authorization: Bearer`.
-- `PATCH /api/auth/me`: actualiza el nombre o correo de la cuenta autenticada; requiere JWT.
-- `DELETE /api/auth/me`: elimina la cuenta autenticada con su contraseña actual; requiere JWT.
-- `GET /static/images/<archivo>`: sirve las imágenes almacenadas en `src/static/images`.
+Las rutas no tienen el prefijo `/api`.
 
-Crear, editar y desactivar productos requiere un JWT válido de una cuenta existente cuyo correo esté en `ADMIN_EMAILS`; las cuentas registradas que no estén autorizadas reciben `403`, y las solicitudes sin un token válido reciben `401`. Las solicitudes de escritura requieren `name`, `price` e `imageFilename`. El archivo de imagen debe existir en `src/static/images`. Las respuestas de producto incluyen `id` UUID, `name`, `price`, `activado`, `imageFilename` e `image` (URL absoluta de la imagen). `activado` se establece en `true` al crear un producto; no se puede cambiar mediante el payload de escritura.
+| Método | Ruta | Descripción | Acceso |
+| --- | --- | --- | --- |
+| `GET` | `/` | Comprueba que el servidor está activo. | Público |
+| `GET` | `/productos` | Devuelve todos los productos. | Público |
+| `POST` | `/productos` | Crea un producto. | Requiere JWT |
+| `GET` | `/productos/<id>` | Busca un producto por ID. | Público |
+| `PUT` | `/productos/<id>` | Actualiza datos de un producto. | Requiere JWT |
+| `DELETE` | `/productos/<id>` | Elimina un producto. | Requiere JWT |
+| `POST` | `/registro` | Registra una cuenta. | Público |
+| `POST` | `/login` | Comprueba las credenciales e intenta emitir un JWT. | Público |
+| `DELETE` | `/cuentas/<cuenta_id>` | Elimina la cuenta indicada. | Sin autenticación |
+
+### Cuentas
+
+Para registrar una cuenta, envía `nombre`, `email` y `password`:
+
+```json
+{
+  "nombre": "Ana",
+  "email": "ana@example.com",
+  "password": "una-clave-segura"
+}
+```
+
+El registro valida que el nombre tenga entre 1 y 20 caracteres, el correo tenga un formato de email básico y no supere 40 caracteres, y la contraseña tenga entre 8 y 34 caracteres. Las contraseñas se guardan con bcrypt. El endpoint responde con los datos públicos de la cuenta (`id`, `nombre` y `email`), sin emitir un token.
+
+Para iniciar sesión, envía `email` y `contrasena`:
+
+```json
+{
+  "email": "ana@example.com",
+  "contrasena": "una-clave-segura"
+}
+```
+
+Si las credenciales son válidas, la respuesta incluye `access_token` y `cuenta`. Los endpoints de escritura de productos requieren que envíes el token en el encabezado HTTP `Authorization` con el esquema Bearer.
+
+### Productos
+
+El formato de un producto es:
+
+```json
+{
+  "id": "UUID",
+  "nombre": "Teclado",
+  "precio": 49.99
+}
+```
+
+Para crear un producto, envía `nombre` y `precio`. Para actualizarlo, `PUT` acepta esos mismos campos; se pueden enviar solo los que se quieran cambiar. `precio` debe poder convertirse a número.
+
+## Notas sobre el estado actual
+
+- `DELETE /productos/<id>` borra el registro de la base de datos; no lo desactiva.
+- `POST /login` genera tokens JWT, pero la configuración actual no asigna `JWT_SECRET_KEY` ni `SECRET_KEY`. Se debe configurar una clave secreta en la aplicación antes de que el inicio de sesión pueda emitir tokens.
+- `DELETE /cuentas/<cuenta_id>` no requiere JWT y elimina la cuenta indicada por el ID.
+- `FRONTEND_ORIGINS` se lee en la configuración, pero no se aplica a CORS en el código actual; la aplicación inicializa CORS con `CORS(app)`.
+- `FLASK_DEBUG` se pasa directamente desde el entorno a Flask. Úsalo solo en desarrollo.

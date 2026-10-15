@@ -4,8 +4,6 @@ Flask>=3.1,<4
 Flask-Cors>=5,<6
 # Facilita la definición de recursos REST para la API.
 Flask-RESTful>=0.3.10,<0.4
-# Servidor WSGI para ejecutar la aplicación en producción.
-gunicorn>=22,<24
 # ORM para definir modelos y consultar la base de datos.
 Flask-SQLAlchemy>=3.1.1,<4
 # Controlador PostgreSQL Psycopg 3 con binarios incluidos.

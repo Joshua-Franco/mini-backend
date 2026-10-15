@@ -1,1 +1,0 @@
-# Marca el directorio como paquete de recursos de la API.
